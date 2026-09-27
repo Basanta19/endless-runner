@@ -5,6 +5,7 @@ import '../../core/app_colors.dart';
 import '../../core/game_data.dart';
 import 'game_screen.dart';
 import 'character_screen.dart';
+import 'missions_screen.dart';
 import 'profile_screen.dart';
 import 'settings_screen.dart';
 import 'store_screen.dart'; // This will remain named StoreScreen for now but I'll update the title
@@ -31,6 +32,94 @@ class _HomeScreenState extends State<HomeScreen>
       begin: -6,
       end: 6,
     ).animate(CurvedAnimation(parent: _idleCtrl, curve: Curves.easeInOut));
+
+    // Show the daily reward popup on the first open of the day
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && GameData().canClaimDailyReward) _showDailyRewardDialog();
+    });
+  }
+
+  void _onDailyRewardTap() {
+    if (GameData().canClaimDailyReward) {
+      _showDailyRewardDialog();
+    } else {
+      showInfoPopup(
+        context,
+        'Reward already claimed\nCome back tomorrow!',
+        icon: Icons.card_giftcard,
+      );
+    }
+  }
+
+  void _showDailyRewardDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.all(28),
+          decoration: BoxDecoration(
+            color: AppColors.panelDark,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AppColors.cardBorder, width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.5), blurRadius: 20),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'DAILY REWARD',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 26,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 3,
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Icon(Icons.card_giftcard,
+                  color: AppColors.orange, size: 64),
+              const SizedBox(height: 16),
+              const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.circle, color: AppColors.gold, size: 24),
+                  SizedBox(width: 8),
+                  Text(
+                    '${GameData.dailyRewardAmount}',
+                    style: TextStyle(
+                      color: AppColors.gold,
+                      fontSize: 34,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Come back every day for more coins!',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: AppColors.textGray, fontSize: 13),
+              ),
+              const SizedBox(height: 24),
+              GradientButton(
+                label: 'CLAIM',
+                gradient: AppColors.greenBtn,
+                onTap: () {
+                  GameData().claimDailyReward();
+                  Navigator.pop(dialogContext);
+                  setState(() {});
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -110,18 +199,25 @@ class _HomeScreenState extends State<HomeScreen>
                       const Color(0xFF29B6F6),
                     ),
                     const SizedBox(width: 4),
-                    Container(
-                      width: 30,
-                      height: 30,
-                      decoration: BoxDecoration(
-                        color: AppColors.mediumBlue,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: AppColors.cardBorder),
+                    GestureDetector(
+                      onTap: () => showInfoPopup(
+                        context,
+                        'Coming soon!',
+                        icon: Icons.storefront_rounded,
                       ),
-                      child: const Icon(
-                        Icons.add,
-                        color: Colors.white,
-                        size: 18,
+                      child: Container(
+                        width: 30,
+                        height: 30,
+                        decoration: BoxDecoration(
+                          color: AppColors.mediumBlue,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: AppColors.cardBorder),
+                        ),
+                        child: const Icon(
+                          Icons.add,
+                          color: Colors.white,
+                          size: 18,
+                        ),
                       ),
                     ),
                   ],
@@ -150,7 +246,9 @@ class _HomeScreenState extends State<HomeScreen>
                             ).then((_) => setState(() {}));
                           }),
                           const SizedBox(height: 10),
-                          _menuBtn(Icons.auto_awesome_motion_rounded, 'UPGRADES', () {
+                          _menuBtn(
+                              Icons.auto_awesome_motion_rounded, 'UPGRADES',
+                              () {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -172,12 +270,23 @@ class _HomeScreenState extends State<HomeScreen>
                             Icons.card_giftcard,
                             'DAILY\nREWARD',
                             AppColors.orange,
+                            onTap: _onDailyRewardTap,
+                            showDot: gd.canClaimDailyReward,
                           ),
                           const SizedBox(height: 10),
                           _specialBtn(
                             Icons.assignment_rounded,
                             'MISSIONS',
                             AppColors.mediumBlue,
+                            showDot: gd.hasClaimableMission,
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const MissionsScreen(),
+                                ),
+                              ).then((_) => setState(() {}));
+                            },
                           ),
                         ],
                       ),
@@ -332,40 +441,65 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  Widget _specialBtn(IconData icon, String label, Color color) {
+  Widget _specialBtn(IconData icon, String label, Color color,
+      {VoidCallback? onTap, bool showDot = false}) {
     return GestureDetector(
-      onTap: () {},
-      child: Container(
-        width: 76,
-        height: 76,
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.9),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
-          boxShadow: [
-            BoxShadow(
-              color: color.withValues(alpha: 0.4),
-              blurRadius: 8,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: Colors.white, size: 28),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 9,
-                fontWeight: FontWeight.bold,
+      onTap: onTap ?? () {},
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          _specialBtnBody(icon, label, color),
+          // "Ready to claim" indicator
+          if (showDot)
+            Positioned(
+              top: -4,
+              right: -4,
+              child: Container(
+                width: 16,
+                height: 16,
+                decoration: BoxDecoration(
+                  color: AppColors.red,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                ),
               ),
-              textAlign: TextAlign.center,
             ),
-          ],
-        ),
+        ],
+      ),
+    );
+  }
+
+  Widget _specialBtnBody(IconData icon, String label, Color color) {
+    return Container(
+      width: 76,
+      height: 76,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.9),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: 0.4),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, color: Colors.white, size: 28),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 9,
+              fontWeight: FontWeight.bold,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
       ),
     );
   }

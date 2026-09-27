@@ -37,6 +37,8 @@ class _GameScreenState extends State<GameScreen> {
   @override
   void dispose() {
     _game.pauseEngine();
+    // Persist mission progress if the player quits mid-run
+    GameData().save();
     // Stop audio when exiting the game screen to prevent overlaying
     AudioService().stopBgm();
     super.dispose();

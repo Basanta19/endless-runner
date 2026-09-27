@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_service.dart';
+import 'missions.dart';
 
 class GameData {
   static final GameData _instance = GameData._internal();
@@ -19,6 +20,15 @@ class GameData {
   bool sfxEnabled = true;
 
   String nickname = "Player";
+
+  // Daily reward — stores the local date (yyyy-mm-dd) of the last claim
+  static const int dailyRewardAmount = 1000;
+  String lastDailyRewardDate = '';
+
+  // Missions — progress resets each time the player moves up a tier
+  int missionTier = 1;
+  List<int> missionProgress = List.filled(Missions.all.length, 0);
+  List<bool> missionClaimed = List.filled(Missions.all.length, false);
 
   static const int maxPowerUpLevel = 5;
   static const int baseUpgradeCost = 500;
@@ -41,7 +51,7 @@ class GameData {
     Color(0xFF212121),
     Color(0xFF90A4AE),
   ];
-  
+
   // Character stats (Ability multipliers)
   static const List<double> characterJumpMultiplier = [1.0, 1.0, 1.25, 0.95];
   static const List<double> characterSpeedMultiplier = [1.0, 1.1, 1.0, 1.2];
@@ -56,6 +66,20 @@ class GameData {
     shieldLevel = prefs.getInt('shieldLevel') ?? 1;
     speedLevel = prefs.getInt('speedLevel') ?? 1;
     nickname = prefs.getString('nickname') ?? "Player";
+    lastDailyRewardDate = prefs.getString('last_daily_reward') ?? '';
+    missionTier = prefs.getInt('mission_tier') ?? 1;
+    final progress = prefs.getStringList('mission_progress');
+    final claimed = prefs.getStringList('mission_claimed');
+    missionProgress = List.generate(
+      Missions.all.length,
+      (i) => progress != null && i < progress.length
+          ? int.tryParse(progress[i]) ?? 0
+          : 0,
+    );
+    missionClaimed = List.generate(
+      Missions.all.length,
+      (i) => claimed != null && i < claimed.length && claimed[i] == 'true',
+    );
     final unlocked =
         prefs.getStringList('unlocked') ?? ['true', 'false', 'false', 'false'];
     unlockedCharacters = unlocked.map((e) => e == 'true').toList();
@@ -73,6 +97,16 @@ class GameData {
     await prefs.setInt('shieldLevel', shieldLevel);
     await prefs.setInt('speedLevel', speedLevel);
     await prefs.setString('nickname', nickname);
+    await prefs.setString('last_daily_reward', lastDailyRewardDate);
+    await prefs.setInt('mission_tier', missionTier);
+    await prefs.setStringList(
+      'mission_progress',
+      missionProgress.map((e) => e.toString()).toList(),
+    );
+    await prefs.setStringList(
+      'mission_claimed',
+      missionClaimed.map((e) => e.toString()).toList(),
+    );
     await prefs.setStringList(
       'unlocked',
       unlockedCharacters.map((e) => e.toString()).toList(),
@@ -89,6 +123,70 @@ class GameData {
       highScore = score;
       await save();
     }
+  }
+
+  String _todayKey() {
+    final now = DateTime.now();
+    return '${now.year}-${now.month.toString().padLeft(2, '0')}-'
+        '${now.day.toString().padLeft(2, '0')}';
+  }
+
+  bool get canClaimDailyReward => lastDailyRewardDate != _todayKey();
+
+  bool claimDailyReward() {
+    if (!canClaimDailyReward) return false;
+    coins += dailyRewardAmount;
+    lastDailyRewardDate = _todayKey();
+    save();
+    return true;
+  }
+
+  // ── Missions ─────────────────────────────────────────────────────────────
+  int get missionReward => Missions.rewardForTier(missionTier);
+
+  int missionTarget(int index) =>
+      Missions.targetFor(Missions.all[index], missionTier);
+
+  bool isMissionComplete(int index) =>
+      missionProgress[index] >= missionTarget(index);
+
+  bool canClaimMission(int index) =>
+      isMissionComplete(index) && !missionClaimed[index];
+
+  bool get hasClaimableMission =>
+      List.generate(Missions.all.length, canClaimMission).any((c) => c);
+
+  /// Adds to a counter mission (coins, dodge, jump, slide, power-ups).
+  /// Kept in memory; persisted on the next save().
+  void addMissionProgress(MissionType type, [int amount = 1]) {
+    final i = Missions.all.indexWhere((m) => m.type == type);
+    if (i < 0 || missionClaimed[i]) return;
+    missionProgress[i] =
+        (missionProgress[i] + amount).clamp(0, missionTarget(i));
+  }
+
+  /// Distance mission tracks the best single run, not a running total.
+  void recordMissionDistance(int meters) {
+    final i = Missions.all.indexWhere((m) => m.type == MissionType.distance);
+    if (i < 0 || missionClaimed[i]) return;
+    if (meters > missionProgress[i]) {
+      missionProgress[i] = meters.clamp(0, missionTarget(i));
+    }
+  }
+
+  /// Claims the gem reward. When every mission in the tier is claimed,
+  /// moves to the next tier with doubled targets and fresh progress.
+  bool claimMission(int index) {
+    if (!canClaimMission(index)) return false;
+    gems += missionReward;
+    missionClaimed[index] = true;
+    if (missionClaimed.every((c) => c)) {
+      missionTier++;
+      missionProgress = List.filled(Missions.all.length, 0);
+      missionClaimed = List.filled(Missions.all.length, false);
+    }
+    save();
+    return true;
   }
 
   bool buyCharacter(int index) {

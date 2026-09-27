@@ -4,7 +4,9 @@ import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 import 'package:runner_rush/core/game_data.dart';
 import 'package:runner_rush/core/game_state.dart';
+import 'package:runner_rush/core/missions.dart';
 import 'package:runner_rush/runner_game.dart';
+import '../obstacles/coin_component.dart';
 import '../../services/audio_service.dart';
 
 enum _Lane { left, center, right }
@@ -130,9 +132,11 @@ class PlayerComponent extends PositionComponent
       _jumpHeight = 1; // Small initial lift
       _onGround = false;
       _canDoubleJump = true;
+      GameData().addMissionProgress(MissionType.jump);
     } else if (_canDoubleJump) {
       _velY = jumpPower * 0.85;
       _canDoubleJump = false;
+      GameData().addMissionProgress(MissionType.jump);
     }
   }
 
@@ -144,6 +148,7 @@ class PlayerComponent extends PositionComponent
     if (!_sliding) {
       _sliding = true;
       _slideFrames = 40;
+      GameData().addMissionProgress(MissionType.slide);
     }
   }
 
@@ -229,11 +234,7 @@ class PlayerComponent extends PositionComponent
     // Magnet attraction
     if (_magnetTimer > 0) {
       _magnetTimer -= dt;
-      final coins = gameRef.children.whereType<PositionComponent>().where((c) {
-        // Simple type check since we can't import CoinComponent easily here without circularity
-        // Actually we can import it, but let's look for distance
-        return c.toString().contains('CoinComponent');
-      });
+      final coins = gameRef.children.whereType<CoinComponent>();
 
       for (final coin in coins) {
         final dist = (coin.position - position).length;

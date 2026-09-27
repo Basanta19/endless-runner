@@ -82,8 +82,8 @@ class _CharacterScreenState extends State<CharacterScreen> {
                         else if (gd.unlockedCharacters[_previewIndex])
                           GestureDetector(
                             onTap: () {
-                              setState(() =>
-                                  gd.selectedCharacter = _previewIndex);
+                              setState(
+                                  () => gd.selectedCharacter = _previewIndex);
                               gd.save();
                             },
                             child: Container(

@@ -1,6 +1,109 @@
 import 'package:flutter/material.dart';
 import '../../core/app_colors.dart';
 
+/// Shows a translucent message popup in the middle of the screen that fades
+/// in, stays briefly, then fades out on its own.
+void showInfoPopup(BuildContext context, String message,
+    {IconData icon = Icons.info_outline_rounded}) {
+  final overlay = Overlay.of(context);
+  late OverlayEntry entry;
+  entry = OverlayEntry(
+    builder: (_) => _InfoPopup(
+      message: message,
+      icon: icon,
+      onDone: () => entry.remove(),
+    ),
+  );
+  overlay.insert(entry);
+}
+
+class _InfoPopup extends StatefulWidget {
+  final String message;
+  final IconData icon;
+  final VoidCallback onDone;
+
+  const _InfoPopup({
+    required this.message,
+    required this.icon,
+    required this.onDone,
+  });
+
+  @override
+  State<_InfoPopup> createState() => _InfoPopupState();
+}
+
+class _InfoPopupState extends State<_InfoPopup>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1800),
+  )..forward().whenComplete(widget.onDone);
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Center(
+        child: AnimatedBuilder(
+          animation: _ctrl,
+          builder: (_, child) {
+            // Fade in (0–15%), hold, fade out (80–100%)
+            final t = _ctrl.value;
+            final opacity = t < 0.15
+                ? t / 0.15
+                : t > 0.8
+                    ? (1 - t) / 0.2
+                    : 1.0;
+            return Opacity(
+              opacity: opacity.clamp(0.0, 1.0),
+              child: Transform.scale(
+                scale: 0.9 + 0.1 * opacity.clamp(0.0, 1.0),
+                child: child,
+              ),
+            );
+          },
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 40),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+              decoration: BoxDecoration(
+                color: AppColors.panelDark.withValues(alpha: 0.75),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: AppColors.cardBorder.withValues(alpha: 0.6),
+                ),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(widget.icon, color: AppColors.gold, size: 32),
+                  const SizedBox(height: 8),
+                  Text(
+                    widget.message,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class GradientButton extends StatefulWidget {
   final String label;
   final Gradient gradient;
@@ -213,7 +316,8 @@ class AppHeader extends StatelessWidget {
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: AppColors.cardBorder),
                 ),
-                child: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
+                child:
+                    const Icon(Icons.arrow_back, color: Colors.white, size: 20),
               ),
             ),
           if (showBackButton) const SizedBox(width: 12),
@@ -259,11 +363,13 @@ class AppSectionHeader extends StatelessWidget {
 class AppCoinBadge extends StatelessWidget {
   final String value;
   final Color color;
+  final IconData icon;
 
   const AppCoinBadge({
     super.key,
     required this.value,
     this.color = AppColors.gold,
+    this.icon = Icons.circle,
   });
 
   @override
@@ -277,7 +383,7 @@ class AppCoinBadge extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(Icons.circle, color: color, size: 16),
+          Icon(icon, color: color, size: 16),
           const SizedBox(width: 6),
           Text(
             value,

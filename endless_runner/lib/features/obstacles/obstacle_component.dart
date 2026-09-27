@@ -3,7 +3,9 @@ import 'dart:math' as math;
 import 'package:flame/collisions.dart';
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
+import 'package:runner_rush/core/game_data.dart';
 import 'package:runner_rush/core/game_state.dart';
+import 'package:runner_rush/core/missions.dart';
 import 'package:runner_rush/features/player/player_component.dart';
 import 'package:runner_rush/runner_game.dart';
 
@@ -15,6 +17,7 @@ class ObstacleComponent extends PositionComponent
         HasGameRef<RunnerGame>,
         CollisionCallbacks {
   final ObstacleType type;
+  bool _hitPlayer = false;
 
   // Cached Paint Objects for Performance
   static final Paint _greyPaint = Paint()..color = Colors.grey;
@@ -61,8 +64,11 @@ class ObstacleComponent extends PositionComponent
     if (gameRef.gameState != RunnerGameState.playing) return;
     // Move vertically downwards
     position.y += gameRef.worldSpeed;
-    // Remove when off the bottom of the screen
-    if (position.y > gameRef.size.y + 100) removeFromParent();
+    // Remove when off the bottom of the screen — it passed the player
+    if (position.y > gameRef.size.y + 100) {
+      if (!_hitPlayer) GameData().addMissionProgress(MissionType.dodge);
+      removeFromParent();
+    }
   }
 
   @override
@@ -99,6 +105,7 @@ class ObstacleComponent extends PositionComponent
           return;
         } else {
           // Small objects use up the shield
+          _hitPlayer = true; // Absorbed by shield, not a dodge
           other.hitShield(); // This resets the shield timer
           gameRef.triggerShake();
           return;

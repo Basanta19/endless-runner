@@ -176,14 +176,6 @@ class GameOverOverlay extends StatelessWidget {
 
                 const SizedBox(height: 22),
 
-                // Watch Ad button
-                _btn(
-                  'WATCH AD',
-                  Icons.play_circle_fill,
-                  AppColors.greenBtn,
-                  () {},
-                ),
-                const SizedBox(height: 10),
                 _btn(
                   'RETRY',
                   Icons.refresh_rounded,

@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../core/app_colors.dart';
 import '../../core/game_data.dart';
@@ -42,14 +43,16 @@ class _StoreScreenState extends State<StoreScreen> {
                       'Protects player • +2s/lvl',
                       _gd.shieldLevel,
                       () => _upgrade('SHIELD'),
-                      const Icon(Icons.shield_rounded, color: AppColors.gold, size: 24),
+                      const Icon(Icons.shield_rounded,
+                          color: AppColors.gold, size: 24),
                     ),
                     _upgradeTile(
                       'SPEED BOOST',
-                      'Invincibility • +2s/lvl',
+                      '+2s/lvl',
                       _gd.speedLevel,
                       () => _upgrade('SPEED'),
-                      const Icon(Icons.bolt_rounded, color: AppColors.gold, size: 24),
+                      const Icon(Icons.bolt_rounded,
+                          color: AppColors.gold, size: 24),
                     ),
                   ],
                 ),
@@ -61,8 +64,8 @@ class _StoreScreenState extends State<StoreScreen> {
     );
   }
 
-  Widget _upgradeTile(
-      String title, String desc, int level, VoidCallback onTap, Widget leading) {
+  Widget _upgradeTile(String title, String desc, int level, VoidCallback onTap,
+      Widget leading) {
     bool isMax = level >= GameData.maxPowerUpLevel;
     int cost = _gd.getUpgradeCost(level);
 
@@ -96,19 +99,7 @@ class _StoreScreenState extends State<StoreScreen> {
                 ),
               ),
             ),
-      bottom: Row(
-        children: List.generate(GameData.maxPowerUpLevel, (i) {
-          return Container(
-            width: 8,
-            height: 8,
-            margin: const EdgeInsets.only(right: 4),
-            decoration: BoxDecoration(
-              color: i < level ? AppColors.green : Colors.white12,
-              shape: BoxShape.circle,
-            ),
-          );
-        }),
-      ),
+      bottom: _LevelDots(level: level),
       onTap: isMax ? null : onTap,
     );
   }
@@ -127,11 +118,95 @@ class _StoreScreenState extends State<StoreScreen> {
         if (type == 'SPEED') _gd.speedLevel++;
         _gd.save();
       });
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('$type upgraded!')));
+      // The level dots animate a "+1" themselves
     } else {
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('Not enough coins!')));
     }
+  }
+}
+
+/// Level dots that pop the new dot and float a "+1" when the level goes up.
+class _LevelDots extends StatefulWidget {
+  final int level;
+  const _LevelDots({required this.level});
+
+  @override
+  State<_LevelDots> createState() => _LevelDotsState();
+}
+
+class _LevelDotsState extends State<_LevelDots>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1000),
+  );
+
+  @override
+  void didUpdateWidget(_LevelDots oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.level > oldWidget.level) _ctrl.forward(from: 0);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _ctrl,
+      builder: (_, __) {
+        final t = _ctrl.value;
+        final animating = _ctrl.isAnimating;
+        final newDot = widget.level - 1;
+
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Row(
+              children: List.generate(GameData.maxPowerUpLevel, (i) {
+                // Newest dot pops in size
+                final pop =
+                    animating && i == newDot ? math.sin(t * math.pi) * 0.8 : 0;
+                return Transform.scale(
+                  scale: 1 + pop.toDouble(),
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    margin: const EdgeInsets.only(right: 4),
+                    decoration: BoxDecoration(
+                      color:
+                          i < widget.level ? AppColors.green : Colors.white12,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                );
+              }),
+            ),
+            if (animating)
+              Positioned(
+                // Starts above the newest dot and floats upward
+                left: newDot * 12.0 - 4,
+                top: -6 - 26 * Curves.easeOut.transform(t),
+                child: Opacity(
+                  opacity: t < 0.7 ? 1 : ((1 - t) / 0.3).clamp(0.0, 1.0),
+                  child: const Text(
+                    '+1',
+                    style: TextStyle(
+                      color: AppColors.green,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                      shadows: [Shadow(color: Colors.black54, blurRadius: 4)],
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
   }
 }

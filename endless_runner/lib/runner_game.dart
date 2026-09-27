@@ -16,6 +16,7 @@ import 'package:runner_rush/services/audio_service.dart';
 
 import 'core/game_data.dart';
 import 'core/game_state.dart';
+import 'core/missions.dart';
 
 class RunnerGame extends FlameGame
     // ignore: deprecated_member_use
@@ -80,6 +81,7 @@ class RunnerGame extends FlameGame
   int _lastSpeedStep = 0;
   double _elapsedSecs = 0;
   double get elapsedSecs => _elapsedSecs;
+  double _scoreAccumulator = 0;
 
   @override
   Color backgroundColor() => const Color(0xFF0D1B2E);
@@ -120,7 +122,15 @@ class RunnerGame extends FlameGame
     _elapsedSecs += dt;
     if (gameState != RunnerGameState.playing) return;
 
-    score += 1;
+    // Throttled score: ~60 points/sec regardless of frame rate
+    _scoreAccumulator += dt * 60;
+    if (_scoreAccumulator >= 1.0) {
+      final points = _scoreAccumulator.toInt();
+      _scoreAccumulator -= points;
+      score += points;
+      GameData().recordMissionDistance(score ~/ Missions.scorePerMeter);
+    }
+
     final speedMult =
         GameData.characterSpeedMultiplier[GameData().selectedCharacter];
 
@@ -148,8 +158,9 @@ class RunnerGame extends FlameGame
       AudioService().updateBgmPitch(worldSpeed);
     }
 
-    // Move the lane reservations down with the world
-    _laneOccupiedUntil.updateAll((k, v) => v + worldSpeed);
+    // Move the lane reservations down with the world (clamped to prevent drift)
+    _laneOccupiedUntil
+        .updateAll((k, v) => (v + worldSpeed).clamp(-10000.0, size.y + 500));
   }
 
   // ── Input ────────────────────────────────────────────────────────────────
@@ -209,6 +220,7 @@ class RunnerGame extends FlameGame
 
   void collectCoin() {
     coinsCollected++;
+    GameData().addMissionProgress(MissionType.coins);
   }
 
   /// Checks if a lane is safe to spawn at a specific Y position
@@ -241,6 +253,7 @@ class RunnerGame extends FlameGame
     _shakeTime = 0;
     _elapsedSecs = 0;
     _lastSpeedStep = 0;
+    _scoreAccumulator = 0;
     player.reset();
     obstacleSpawner.reset();
     coinSpawner.reset();

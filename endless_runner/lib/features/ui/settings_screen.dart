@@ -85,6 +85,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       trailing: const Icon(Icons.chevron_right,
                           color: AppColors.textGray),
                     ),
+                    AppActionTile(
+                      title: 'RESET POWER-UPS',
+                      subtitle: 'Magnet, shield & speed back to level 1',
+                      leading:
+                          const Icon(Icons.bolt_rounded, color: AppColors.red),
+                      onTap: () => _showResetPowerUpsConfirmation(),
+                      trailing: const Icon(Icons.chevron_right,
+                          color: AppColors.textGray),
+                    ),
                     const AppSectionHeader(title: 'ABOUT'),
                     const AppActionTile(
                       title: 'VERSION',
@@ -98,7 +107,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     const AppActionTile(
                       title: 'DEVELOPER',
                       leading: Icon(Icons.code, color: AppColors.lightBlue),
-                      trailing: Text('DEEPMIND TEAM',
+                      trailing: Text('Basanta',
                           style: TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold)),
@@ -188,6 +197,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('High score reset!')));
+            },
+            child: const Text('RESET',
+                style: TextStyle(
+                    color: AppColors.red, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showResetPowerUpsConfirmation() {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.panelDark,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: const BorderSide(color: AppColors.cardBorder)),
+        title: const Text('RESET POWER-UPS',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: const Text(
+            'This will set Magnet, Shield and Speed Boost back to level 1. '
+            'Coins spent on upgrades will not be refunded. Continue?',
+            style: TextStyle(color: AppColors.textGray)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('CANCEL',
+                style: TextStyle(color: AppColors.textGray)),
+          ),
+          TextButton(
+            onPressed: () {
+              setState(() {
+                _gd.magnetLevel = 1;
+                _gd.shieldLevel = 1;
+                _gd.speedLevel = 1;
+                _gd.save();
+              });
+              Navigator.pop(dialogContext);
+              showInfoPopup(
+                context,
+                'Power-ups reset to level 1',
+                icon: Icons.bolt_rounded,
+              );
             },
             child: const Text('RESET',
                 style: TextStyle(

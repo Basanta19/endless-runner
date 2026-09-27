@@ -2,7 +2,9 @@ import 'dart:math' as math;
 import 'package:flame/collisions.dart';
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
+import 'package:runner_rush/core/game_data.dart';
 import 'package:runner_rush/core/game_state.dart';
+import 'package:runner_rush/core/missions.dart';
 import 'package:runner_rush/runner_game.dart';
 import '../../services/audio_service.dart';
 import '../player/player_component.dart';
@@ -16,9 +18,43 @@ class PowerUpComponent extends PositionComponent
         CollisionCallbacks {
   final PowerUpType type;
   double _animTime = 0;
+  bool _collected = false;
+
+  // ── Cached Paint objects (avoid per-frame allocation) ───────────────────
+  late final Color _glowColor;
+  late final Paint _glowPaint;
+  late final Paint _ringPaint;
+  static final Paint _capsulePaint = Paint()..color = const Color(0xFF263238);
+  static final Paint _capsuleStrokePaint = Paint()
+    ..color = Colors.white.withValues(alpha: 0.1)
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1;
+  static final Paint _magnetPaint = Paint()
+    ..color = Colors.redAccent
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 6
+    ..strokeCap = StrokeCap.round;
+  static final Paint _tipPaint = Paint()..color = Colors.white;
+  static final Paint _shieldFillPaint = Paint()..color = Colors.greenAccent;
+  static final Paint _shieldStrokePaint = Paint()
+    ..color = Colors.white
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1;
+  static final Paint _speedPaint = Paint()..color = Colors.amberAccent;
 
   PowerUpComponent({required Vector2 position, required this.type})
-      : super(position: position, size: Vector2(55, 55));
+      : super(position: position, size: Vector2(55, 55)) {
+    _glowColor = type == PowerUpType.magnet
+        ? Colors.blueAccent
+        : type == PowerUpType.shield
+            ? Colors.greenAccent
+            : Colors.amberAccent;
+    _glowPaint = Paint()..color = _glowColor.withValues(alpha: 0.15);
+    _ringPaint = Paint()
+      ..color = _glowColor.withValues(alpha: 0.8)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3;
+  }
 
   @override
   Future<void> onLoad() async {
@@ -28,7 +64,7 @@ class PowerUpComponent extends PositionComponent
   @override
   void update(double dt) {
     if (gameRef.gameState != RunnerGameState.playing) return;
-    
+
     // Move vertically downwards
     position.y += gameRef.worldSpeed;
     _animTime += dt;
@@ -42,6 +78,9 @@ class PowerUpComponent extends PositionComponent
       Set<Vector2> intersectionPoints, PositionComponent other) {
     super.onCollisionStart(intersectionPoints, other);
     if (other is PlayerComponent) {
+      if (_collected) return;
+      _collected = true;
+      GameData().addMissionProgress(MissionType.powerUp);
       AudioService().playSfx('powerup.wav');
       if (type == PowerUpType.magnet) {
         other.activateMagnet();
@@ -61,38 +100,17 @@ class PowerUpComponent extends PositionComponent
     final h = size.y;
     final center = Offset(w / 2, h / 2 + bounce);
 
-    // Halo / Glow
-    final glowColor = type == PowerUpType.magnet 
-        ? Colors.blueAccent 
-        : type == PowerUpType.shield 
-            ? Colors.greenAccent 
-            : Colors.amberAccent;
-    canvas.drawCircle(
-      center,
-      28,
-      Paint()
-        ..color = glowColor.withValues(alpha: 0.2)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12),
-    );
+    // Soft glow — two layered circles instead of expensive MaskFilter.blur
+    canvas.drawCircle(center, 32, _glowPaint);
+    canvas.drawCircle(center, 28, _glowPaint);
 
     // Rotating Ring
-    final ringPaint = Paint()
-      ..color = glowColor.withValues(alpha: 0.8)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3;
     final ringRadius = 22.0 + math.sin(_animTime * 6) * 2;
-    canvas.drawCircle(center, ringRadius, ringPaint);
+    canvas.drawCircle(center, ringRadius, _ringPaint);
 
     // Main capsule
-    canvas.drawCircle(center, 18, Paint()..color = const Color(0xFF263238));
-    canvas.drawCircle(
-      center,
-      18,
-      Paint()
-        ..color = Colors.white.withValues(alpha: 0.1)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1,
-    );
+    canvas.drawCircle(center, 18, _capsulePaint);
+    canvas.drawCircle(center, 18, _capsuleStrokePaint);
 
     // Icon
     if (type == PowerUpType.magnet) {
@@ -105,48 +123,41 @@ class PowerUpComponent extends PositionComponent
   }
 
   void _drawMagnetIcon(Canvas canvas, Offset center) {
-    final p = Paint()
-      ..color = Colors.redAccent
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 6
-      ..strokeCap = StrokeCap.round;
-    
     final path = Path()
       ..moveTo(center.dx - 8, center.dy + 8)
       ..lineTo(center.dx - 8, center.dy - 4)
-      ..arcToPoint(Offset(center.dx + 8, center.dy - 4), radius: const Radius.circular(8))
+      ..arcToPoint(Offset(center.dx + 8, center.dy - 4),
+          radius: const Radius.circular(8))
       ..lineTo(center.dx + 8, center.dy + 8);
-    
-    canvas.drawPath(path, p);
-    
+
+    canvas.drawPath(path, _magnetPaint);
+
     // White tips
-    final tipPaint = Paint()..color = Colors.white;
-    canvas.drawRect(Rect.fromCenter(center: Offset(center.dx - 8, center.dy + 6), width: 6, height: 4), tipPaint);
-    canvas.drawRect(Rect.fromCenter(center: Offset(center.dx + 8, center.dy + 6), width: 6, height: 4), tipPaint);
+    canvas.drawRect(
+        Rect.fromCenter(
+            center: Offset(center.dx - 8, center.dy + 6), width: 6, height: 4),
+        _tipPaint);
+    canvas.drawRect(
+        Rect.fromCenter(
+            center: Offset(center.dx + 8, center.dy + 6), width: 6, height: 4),
+        _tipPaint);
   }
 
   void _drawShieldIcon(Canvas canvas, Offset center) {
-    final p = Paint()..color = Colors.greenAccent;
     final path = Path()
       ..moveTo(center.dx, center.dy - 10)
       ..lineTo(center.dx + 8, center.dy - 6)
       ..lineTo(center.dx + 8, center.dy + 4)
-      ..quadraticBezierTo(center.dx, center.dy + 10, center.dx - 8, center.dy + 4)
+      ..quadraticBezierTo(
+          center.dx, center.dy + 10, center.dx - 8, center.dy + 4)
       ..lineTo(center.dx - 8, center.dy - 6)
       ..close();
-    
-    canvas.drawPath(path, p);
-    canvas.drawPath(
-      path,
-      Paint()
-        ..color = Colors.white
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1,
-    );
+
+    canvas.drawPath(path, _shieldFillPaint);
+    canvas.drawPath(path, _shieldStrokePaint);
   }
 
   void _drawSpeedIcon(Canvas canvas, Offset center) {
-    final p = Paint()..color = Colors.amberAccent;
     final path = Path()
       ..moveTo(center.dx + 4, center.dy - 12)
       ..lineTo(center.dx - 8, center.dy + 2)
@@ -156,6 +167,6 @@ class PowerUpComponent extends PositionComponent
       ..lineTo(center.dx + 2, center.dy - 2)
       ..close();
 
-    canvas.drawPath(path, p);
+    canvas.drawPath(path, _speedPaint);
   }
 }

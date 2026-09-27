@@ -29,6 +29,11 @@ class CoinComponent extends PositionComponent
   // Removed MaskFilter as it is extremely expensive on mobile
 
   final Paint _facePaint = Paint();
+
+  // Cached shader to avoid per-frame allocation
+  Shader? _cachedShader;
+  double _cachedShaderWidth = -1;
+
   CoinComponent({required Vector2 position}) : super(position: position) {
     size = Vector2(35, 35);
   }
@@ -78,13 +83,17 @@ class CoinComponent extends PositionComponent
     // Glow (Simplified for performance)
     canvas.drawCircle(center, w / 2 + 2, _glowPaint);
 
-    // Coin face (Cache shader periodically or use solid color at high speed)
+    // Coin face — cache shader, only recreate when width changes significantly
     final rect = Rect.fromCenter(center: center, width: coinWidth, height: h);
-    _facePaint.shader = const LinearGradient(
-      colors: [Color(0xFFFFD700), Color(0xFFFFA000)],
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-    ).createShader(rect);
+    if (_cachedShader == null || (coinWidth - _cachedShaderWidth).abs() > 1.0) {
+      _cachedShaderWidth = coinWidth;
+      _cachedShader = const LinearGradient(
+        colors: [Color(0xFFFFD700), Color(0xFFFFA000)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ).createShader(rect);
+    }
+    _facePaint.shader = _cachedShader;
 
     canvas.drawOval(rect, _facePaint);
 
