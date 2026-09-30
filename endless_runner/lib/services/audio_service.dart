@@ -78,20 +78,23 @@ class AudioService {
 
   void playBgm() {
     if (!isMusicEnabled) return;
+    void log(Object e) => debugPrint('Error playing BGM: $e');
     try {
-      // Ensure any existing BGM is stopped before starting
-      FlameAudio.bgm.stop();
-      FlameAudio.bgm.play('bgm.mp3', volume: 0.4);
+      // Ensure any existing BGM is stopped before starting. Both calls are
+      // async, so failures arrive on the futures, not as a throw here.
+      FlameAudio.bgm.stop().catchError(log);
+      FlameAudio.bgm.play('bgm.mp3', volume: 0.4).catchError(log);
     } catch (e) {
-      debugPrint('Error playing BGM: $e');
+      log(e);
     }
   }
 
   void stopBgm() {
+    void log(Object e) => debugPrint('Error stopping BGM: $e');
     try {
-      FlameAudio.bgm.stop();
+      FlameAudio.bgm.stop().catchError(log);
     } catch (e) {
-      debugPrint('Error stopping BGM: $e');
+      log(e);
     }
   }
 
@@ -107,11 +110,6 @@ class AudioService {
           // Log only, never crash the game over a sound
           (Object e) => debugPrint('SFX "$name" failed to play: $e'),
         );
-  }
-
-  void updateBgmPitch(double worldSpeed) {
-    // Disabled dynamic pitch to prevent audio lag and phasing issues
-    return;
   }
 
   void toggleMusic() {

@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flame/components.dart';
+import 'package:runner_rush/core/object_pool.dart';
 import 'package:runner_rush/core/game_state.dart';
 import 'package:runner_rush/runner_game.dart';
 import 'coin_component.dart';
@@ -7,6 +8,8 @@ import 'coin_component.dart';
 // ignore: deprecated_member_use
 class CoinSpawner extends Component with HasGameRef<RunnerGame> {
   final Random _rng = Random();
+  final ObjectPool<CoinComponent> _pool =
+      ObjectPool(CoinComponent.new, maxSize: 40);
   double _timer = 0;
   double _interval = 0.9;
 
@@ -68,8 +71,8 @@ class CoinSpawner extends Component with HasGameRef<RunnerGame> {
     // Strict lane reservation check - covers ALL objects (buses, hurdles, etc)
     if (!gameRef.isLaneClear(laneIndex, y, h)) return;
 
-    final pos = Vector2(laneX - 17, y);
-    gameRef.add(CoinComponent(position: pos));
+    // Recycled from the pool instead of creating a new coin each time
+    gameRef.add(_pool.acquire()..reset(laneX - 17, y));
     gameRef.reserveLane(laneIndex, y + h);
   }
 

@@ -61,9 +61,16 @@ class PlayerComponent extends PositionComponent
     ..style = PaintingStyle.stroke
     ..strokeWidth = 2;
 
-  bool get isJumping => !_onGround && _jumpHeight > 10;
   bool get isSliding => _sliding;
   double get jumpHeight => _jumpHeight;
+
+  /// Jump height needed to pass over things on the road (low obstacles,
+  /// coins). The hitbox stays on the ground; only the drawing rises.
+  static const double clearHeight = 20;
+  bool get isAboveGround => _jumpHeight > clearHeight;
+
+  /// The player's hitbox in game coordinates (shrinks while sliding).
+  Rect get hitboxRect => _hitbox.toAbsoluteRect();
   double get speedMultiplier => _speedTimer > 0 ? 1.6 : 1.0;
   bool get isInvincible => _invincibleTimer > 0;
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'database_service.dart';
+import 'difficulty.dart';
 import 'missions.dart';
 
 class GameData {
@@ -159,16 +160,36 @@ class GameData {
     required int coinsCollected,
   }) async {
     if (!DatabaseService.isSupported || score <= 0) return;
+    final run = RunRecord(
+      score: score,
+      distance: score ~/ Missions.scorePerMeter,
+      coins: coinsCollected,
+      character: selectedCharacter,
+      playedAt: DateTime.now(),
+    );
+    _runWrite = _runWrite.then((_) async {
+      try {
+        await DatabaseService().insertRun(run);
+      } catch (e) {
+        debugPrint('Recording run failed: $e');
+      }
+    });
+    await _runWrite;
+  }
+
+  // Pending run insert, so reads right after a game over include that run
+  Future<void> _runWrite = Future.value();
+
+  /// Recent run scores, oldest first — input for difficulty adjustment.
+  Future<List<int>> recentRunScores() async {
+    if (!DatabaseService.isSupported) return [];
     try {
-      await DatabaseService().insertRun(RunRecord(
-        score: score,
-        distance: score ~/ Missions.scorePerMeter,
-        coins: coinsCollected,
-        character: selectedCharacter,
-        playedAt: DateTime.now(),
-      ));
+      await _runWrite;
+      return await DatabaseService()
+          .recentRunScores(limit: DifficultyAdjuster.sampleSize);
     } catch (e) {
-      debugPrint('Recording run failed: $e');
+      debugPrint('Loading recent runs failed: $e');
+      return [];
     }
   }
 

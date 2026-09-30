@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flame/collisions.dart';
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
+import 'package:runner_rush/core/object_pool.dart';
 import 'package:runner_rush/core/game_data.dart';
 import 'package:runner_rush/core/game_state.dart';
 import 'package:runner_rush/core/missions.dart';
@@ -15,9 +16,12 @@ class ObstacleComponent extends PositionComponent
     with
         // ignore: deprecated_member_use
         HasGameRef<RunnerGame>,
-        CollisionCallbacks {
-  final ObstacleType type;
+        CollisionCallbacks,
+        Poolable {
+  ObstacleType type;
   bool _hitPlayer = false;
+  RectangleHitbox? _hitbox;
+  bool _pathsBuilt = false;
 
   // Cached Paint Objects for Performance
   static final Paint _greyPaint = Paint()..color = Colors.grey;
@@ -46,14 +50,31 @@ class ObstacleComponent extends PositionComponent
   final Path _conePath = Path();
   final Path _stripePath = Path();
 
-  ObstacleComponent(
-      {required Vector2 position, required Vector2 size, required this.type})
-      : super(position: position, size: size);
+  /// Created empty by the pool; [reset] gives it a type, size and position.
+  ObstacleComponent() : type = ObstacleType.cone;
+
+  /// Prepares a (new or recycled) obstacle before it's added to the game.
+  void reset({
+    required Vector2 position,
+    required Vector2 size,
+    required ObstacleType type,
+  }) {
+    this.position.setFrom(position);
+    this.size.setFrom(size);
+    this.type = type;
+    _hitPlayer = false;
+    // Shapes depend on size, so rebuild them on the next render
+    _conePath.reset();
+    _stripePath.reset();
+    _pathsBuilt = false;
+    // Recycled obstacles already have a hitbox — resize it for the new type
+    _hitbox?.size.setValues(size.x - 14, size.y - 10);
+  }
 
   @override
   Future<void> onLoad() async {
-    // Slightly inset hitbox for fairness
-    await add(RectangleHitbox(
+    // Slightly inset hitbox for fairness (runs once; reused when recycled)
+    await add(_hitbox = RectangleHitbox(
       size: Vector2(size.x - 14, size.y - 10),
       position: Vector2(7, 5),
     ));
@@ -84,7 +105,7 @@ class ObstacleComponent extends PositionComponent
           type == ObstacleType.barrier ||
           type == ObstacleType.hurdle;
 
-      if (canJumpOver && other.jumpHeight > 20) {
+      if (canJumpOver && other.isAboveGround) {
         return; // Successfully jumped over
       }
 
@@ -120,7 +141,8 @@ class ObstacleComponent extends PositionComponent
   @override
   void render(Canvas canvas) {
     // Lazy-init paths if needed
-    if (_conePath.getBounds().isEmpty) {
+    if (!_pathsBuilt) {
+      _pathsBuilt = true;
       final w = size.x;
       final h = size.y;
       _conePath.moveTo(w / 2, 0);

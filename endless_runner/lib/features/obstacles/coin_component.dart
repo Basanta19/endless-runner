@@ -1,9 +1,8 @@
 import 'dart:math' as math;
-import 'package:flame/collisions.dart';
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
+import 'package:runner_rush/core/object_pool.dart';
 import 'package:runner_rush/core/game_state.dart';
-import 'package:runner_rush/features/player/player_component.dart';
 import 'package:runner_rush/runner_game.dart';
 import '../../services/audio_service.dart';
 
@@ -11,7 +10,8 @@ class CoinComponent extends PositionComponent
     with
         // ignore: deprecated_member_use
         HasGameRef<RunnerGame>,
-        CollisionCallbacks {
+        Poolable {
+  static final math.Random _rng = math.Random();
   double _animOffset = 0;
   bool _collected = false;
 
@@ -37,15 +37,19 @@ class CoinComponent extends PositionComponent
       end: Alignment.bottomRight,
     ).createShader(const Rect.fromLTWH(0, 0, 35, 35));
 
-  CoinComponent({required Vector2 position}) : super(position: position) {
+  /// Created empty by the pool; [reset] places it before it's added.
+  CoinComponent() {
     size = Vector2(35, 35);
   }
 
-  @override
-  Future<void> onLoad() async {
-    _animOffset = math.Random().nextDouble() * 10;
-    await add(CircleHitbox(radius: 16));
+  /// Prepares a (new or recycled) coin before it's added to the game.
+  void reset(double x, double y) {
+    position.setValues(x, y);
+    _collected = false;
+    _animOffset = _rng.nextDouble() * 10; // coins spin out of sync
   }
+
+  static const double _radius = 16;
 
   @override
   void update(double dt) {
@@ -54,23 +58,37 @@ class CoinComponent extends PositionComponent
     // Move vertically downwards
     position.y += gameRef.worldSpeed * f;
     _animOffset += 0.12 * f;
+
+    // Pick-up check every frame instead of Flame collision events: those only
+    // fire where outlines cross, so a coin fully inside the player's tall
+    // hitbox would go unnoticed. Coins you jump over are skipped while you're
+    // in the air, and still collected if you land while it's under you.
+    final player = gameRef.player;
+    if (!_collected && !player.isAboveGround && _touches(player.hitboxRect)) {
+      _collect();
+      return;
+    }
+
     // Remove when off the bottom of the screen
     if (position.y > gameRef.size.y + 50) removeFromParent();
   }
 
-  @override
-  void onCollisionStart(
-      Set<Vector2> intersectionPoints, PositionComponent other) {
-    super.onCollisionStart(intersectionPoints, other);
-    if (_collected) return;
-    if (other is PlayerComponent) {
-      _collected = true;
-      AudioService().playSfx('collect.wav', volume: 0.5);
-      gameRef.collectCoin();
-      // Spawn particle burst then remove
-      gameRef.add(_CoinParticle(position: position.clone()));
-      removeFromParent();
-    }
+  /// Circle (the coin) vs rectangle (the player's hitbox) overlap.
+  bool _touches(Rect r) {
+    final cx = position.x + size.x / 2;
+    final cy = position.y + size.y / 2;
+    final dx = cx - cx.clamp(r.left, r.right);
+    final dy = cy - cy.clamp(r.top, r.bottom);
+    return dx * dx + dy * dy <= _radius * _radius;
+  }
+
+  void _collect() {
+    _collected = true;
+    AudioService().playSfx('collect.wav', volume: 0.5);
+    gameRef.collectCoin();
+    // Spawn particle burst then remove
+    gameRef.add(_CoinParticle(position: position.clone()));
+    removeFromParent();
   }
 
   @override

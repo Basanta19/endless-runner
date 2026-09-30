@@ -15,6 +15,7 @@ import 'package:runner_rush/features/player/player_component.dart';
 import 'package:runner_rush/services/audio_service.dart';
 
 import 'core/game_data.dart';
+import 'core/difficulty.dart';
 import 'core/game_state.dart';
 import 'core/missions.dart';
 
@@ -22,8 +23,7 @@ class RunnerGame extends FlameGame
     // ignore: deprecated_member_use
     with
         HasCollisionDetection,
-        PanDetector,
-        TapCallbacks {
+        PanDetector {
   RunnerGameState gameState = RunnerGameState.menu;
   final scoreNotifier = ValueNotifier<int>(0);
   final coinsNotifier = ValueNotifier<int>(0);
@@ -62,6 +62,17 @@ class RunnerGame extends FlameGame
 
   double worldSpeed = 6.0;
 
+  /// Dynamic difficulty for this run (see DifficultyAdjuster):
+  /// < 1 easier, 1 normal, > 1 harder. Set at the start of each run.
+  double difficulty = 1.0;
+
+  Future<void> _refreshDifficulty() async {
+    final scores = await GameData().recentRunScores();
+    difficulty = DifficultyAdjuster.factorFor(scores);
+    debugPrint('DDA: recent scores $scores → difficulty '
+        '${difficulty.toStringAsFixed(2)}');
+  }
+
   // Lane Reservation System to prevent overlaps
   // Stores the lowest Y position (top-most in negative Y space) of the last spawned object per lane
   final Map<int, double> _laneOccupiedUntil = {0: 10000, 1: 10000, 2: 10000};
@@ -95,7 +106,6 @@ class RunnerGame extends FlameGame
 
   double _shakeTime = 0;
   bool _cameraShaken = false;
-  int _lastSpeedStep = 0;
   double _elapsedSecs = 0;
   double get elapsedSecs => _elapsedSecs;
   double _scoreAccumulator = 0;
@@ -131,11 +141,17 @@ class RunnerGame extends FlameGame
     await add(hud);
 
     camera.viewfinder.position = Vector2(size.x / 2, size.y / 2);
+    await _refreshDifficulty();
     gameState = RunnerGameState.playing;
   }
 
   @override
   void update(double dt) {
+    // Cap the frame time for the whole game (movement, score, spawn timers,
+    // power-up timers) together. After a long hitch the game briefly runs in
+    // slow motion instead of objects teleporting — and nothing gets out of
+    // step, e.g. score racing ahead while obstacles crawl.
+    if (dt > maxFrameDt) dt = maxFrameDt;
     super.update(dt);
     _elapsedSecs += dt;
     if (gameState != RunnerGameState.playing) return;
@@ -178,22 +194,19 @@ class RunnerGame extends FlameGame
       _cameraShaken = false;
     }
 
-    // Only update audio pitch when a new speed milestone is reached
-    if (speedStep != _lastSpeedStep) {
-      _lastSpeedStep = speedStep;
-      AudioService().updateBgmPitch(worldSpeed);
-    }
-
     // Move the lane reservations down with the world (clamped to prevent drift)
     final step = worldSpeed * frameScale(dt);
     _laneOccupiedUntil
         .updateAll((k, v) => (v + step).clamp(-10000.0, size.y + 500));
   }
 
+  /// Longest frame the game will simulate at once (= 3 frames at 60fps).
+  static const double maxFrameDt = 0.05;
+
   /// Converts a frame's dt into "60fps frames" so movement tuned per-frame
   /// stays the same speed at any refresh rate and doesn't jerk on a dropped
-  /// frame. Capped so a long hitch can't teleport things through the player.
-  static double frameScale(double dt) => (dt * 60).clamp(0.0, 3.0);
+  /// frame. dt is already capped by [update], so this is at most 3.
+  static double frameScale(double dt) => dt * 60;
 
   // ── Input ────────────────────────────────────────────────────────────────
   @override
@@ -229,11 +242,6 @@ class RunnerGame extends FlameGame
   void onPanEnd(DragEndInfo info) {
     _panStart = null;
     _panHandled = false;
-  }
-
-  @override
-  void onTapDown(TapDownEvent event) {
-    // Jump restricted to swipe up (handled in onPanUpdate)
   }
 
   // ── Public API ───────────────────────────────────────────────────────────
@@ -323,9 +331,9 @@ class RunnerGame extends FlameGame
     worldSpeed = 6.0;
     _shakeTime = 0;
     _elapsedSecs = 0;
-    _lastSpeedStep = 0;
     _scoreAccumulator = 0;
     _respawnsThisRun = 0;
+    _refreshDifficulty(); // re-tune from the run that just ended
     player.reset();
     obstacleSpawner.reset();
     coinSpawner.reset();

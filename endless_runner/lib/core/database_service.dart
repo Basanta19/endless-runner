@@ -176,5 +176,16 @@ class DatabaseService {
     return rows.map(RunRecord.fromRow).toList();
   }
 
+  /// Scores of the most recent runs, oldest first (for difficulty tuning).
+  Future<List<int>> recentRunScores({int limit = 5}) async {
+    final rows = await (await db).query(
+      'runs',
+      columns: ['score'],
+      orderBy: 'played_at DESC, id DESC',
+      limit: limit,
+    );
+    return rows.reversed.map((r) => r['score'] as int).toList();
+  }
+
   Future<void> clearRuns() async => (await db).delete('runs');
 }

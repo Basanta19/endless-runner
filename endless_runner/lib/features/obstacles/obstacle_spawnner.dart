@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart' show Size;
+import 'package:runner_rush/core/object_pool.dart';
 import 'package:runner_rush/core/game_state.dart';
 import 'package:runner_rush/runner_game.dart';
 import 'obstacle_component.dart';
@@ -8,6 +9,10 @@ import 'obstacle_component.dart';
 // ignore: deprecated_member_use
 class ObstacleSpawner extends Component with HasGameRef<RunnerGame> {
   final Random _rng = Random();
+  final ObjectPool<ObstacleComponent> _pool =
+      ObjectPool(ObstacleComponent.new, maxSize: 20);
+  final Vector2 _tmpPos = Vector2.zero();
+  final Vector2 _tmpSize = Vector2.zero();
   double _timer = 0;
   double _interval = 1.6; // seconds between spawns
 
@@ -15,8 +20,10 @@ class ObstacleSpawner extends Component with HasGameRef<RunnerGame> {
   void update(double dt) {
     if (gameRef.gameState != RunnerGameState.playing) return;
     _timer += dt;
-    // Interval shrinks as worldSpeed rises
-    _interval = (1.8 - (gameRef.worldSpeed - 5.5) * 0.08).clamp(0.6, 1.8);
+    // Interval shrinks as worldSpeed rises, then dynamic difficulty scales it:
+    // easier → obstacles further apart, harder → closer together
+    final base = (1.8 - (gameRef.worldSpeed - 5.5) * 0.08).clamp(0.6, 1.8);
+    _interval = (base / gameRef.difficulty).clamp(0.5, 2.25);
 
     if (_timer >= _interval) {
       _timer = 0;
@@ -55,7 +62,9 @@ class ObstacleSpawner extends Component with HasGameRef<RunnerGame> {
   }
 
   ObstacleType _pickType() {
-    final speed = gameRef.worldSpeed;
+    // Dynamic difficulty shifts the obstacle mix: harder players meet buses
+    // and containers sooner, struggling players get more cones and barriers
+    final speed = gameRef.worldSpeed * gameRef.difficulty;
     final roll = _rng.nextInt(10);
     if (speed > 12) {
       return ObstacleType.container;
@@ -98,11 +107,13 @@ class ObstacleSpawner extends Component with HasGameRef<RunnerGame> {
     // Strict lane reservation check
     if (!gameRef.isLaneClear(laneIndex, spawnY, h)) return;
 
-    final obs = ObstacleComponent(
-      position: Vector2(laneX - sz.width / 2, spawnY),
-      size: Vector2(sz.width, sz.height),
-      type: type,
-    );
+    // Recycled from the pool instead of creating a new obstacle each time
+    final obs = _pool.acquire()
+      ..reset(
+        position: _tmpPos..setValues(laneX - sz.width / 2, spawnY),
+        size: _tmpSize..setValues(sz.width, sz.height),
+        type: type,
+      );
     gameRef.add(obs);
     gameRef.reserveLane(laneIndex, spawnY + h);
   }

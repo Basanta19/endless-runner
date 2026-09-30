@@ -64,8 +64,7 @@ void main() {
 
     final profile = await DatabaseService().loadProfile();
     expect(profile!['coins'], 200); // last save wins
-    expect(await DatabaseService().loadCharacters(),
-        [true, false, true, true]);
+    expect(await DatabaseService().loadCharacters(), [true, false, true, true]);
     final missions = await DatabaseService().loadMissions();
     expect(missions[1]['progress'], 42);
   });
