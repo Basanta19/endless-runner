@@ -63,7 +63,7 @@ class ObstacleComponent extends PositionComponent
   void update(double dt) {
     if (gameRef.gameState != RunnerGameState.playing) return;
     // Move vertically downwards
-    position.y += gameRef.worldSpeed;
+    position.y += gameRef.worldSpeed * RunnerGame.frameScale(dt);
     // Remove when off the bottom of the screen — it passed the player
     if (position.y > gameRef.size.y + 100) {
       if (!_hitPlayer) GameData().addMissionProgress(MissionType.dodge);

@@ -79,28 +79,64 @@ class _GameScreenState extends State<GameScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => PauseMenuDialog(
-        onResume: () {
+      builder: (_) => PopScope(
+        // Device back button on the pause menu = resume
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) {
+          if (didPop) return;
           Navigator.pop(context);
           _game.resumeGame();
         },
-        onRestart: () {
-          Navigator.pop(context);
-          _safeSetState(() => _gameOver = false);
-          _game.restartGame();
-          _startHint();
-        },
-        onHome: () {
-          Navigator.pop(context);
-          Navigator.pop(context);
-        },
-        onExit: () => SystemNavigator.pop(),
+        child: PauseMenuDialog(
+          onResume: () {
+            Navigator.pop(context);
+            _game.resumeGame();
+          },
+          onRestart: () {
+            Navigator.pop(context);
+            _safeSetState(() => _gameOver = false);
+            _game.restartGame();
+            _startHint();
+          },
+          onHome: () {
+            Navigator.pop(context);
+            Navigator.pop(context);
+          },
+          onExit: () => SystemNavigator.pop(),
+        ),
       ),
     );
   }
 
+  /// Device back button during a run: pause instead of leaving the game.
+  void _onBackPressed() {
+    switch (_game.gameState) {
+      case RunnerGameState.playing:
+        _onPause();
+        break;
+      case RunnerGameState.gameOver:
+        // On the Game Over screen, back goes home like the HOME button
+        _game.pauseEngine();
+        Navigator.pop(context);
+        break;
+      default:
+        // Respawn countdown / loading: ignore
+        break;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _onBackPressed();
+      },
+      child: _buildGame(context),
+    );
+  }
+
+  Widget _buildGame(BuildContext context) {
     return Scaffold(
       body: Stack(
         children: [

@@ -28,11 +28,14 @@ class CoinComponent extends PositionComponent
     ..color = Colors.yellow.withValues(alpha: 0.2);
   // Removed MaskFilter as it is extremely expensive on mobile
 
-  final Paint _facePaint = Paint();
-
-  // Cached shader to avoid per-frame allocation
-  Shader? _cachedShader;
-  double _cachedShaderWidth = -1;
+  // Face gradient built once for the full-size coin and shared by all coins.
+  // The spin is done by squashing the canvas, so the shader never changes.
+  static final Paint _facePaint = Paint()
+    ..shader = const LinearGradient(
+      colors: [Color(0xFFFFD700), Color(0xFFFFA000)],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    ).createShader(const Rect.fromLTWH(0, 0, 35, 35));
 
   CoinComponent({required Vector2 position}) : super(position: position) {
     size = Vector2(35, 35);
@@ -47,9 +50,10 @@ class CoinComponent extends PositionComponent
   @override
   void update(double dt) {
     if (gameRef.gameState != RunnerGameState.playing) return;
+    final f = RunnerGame.frameScale(dt);
     // Move vertically downwards
-    position.y += gameRef.worldSpeed;
-    _animOffset += 0.12;
+    position.y += gameRef.worldSpeed * f;
+    _animOffset += 0.12 * f;
     // Remove when off the bottom of the screen
     if (position.y > gameRef.size.y + 50) removeFromParent();
   }
@@ -83,19 +87,15 @@ class CoinComponent extends PositionComponent
     // Glow (Simplified for performance)
     canvas.drawCircle(center, w / 2 + 2, _glowPaint);
 
-    // Coin face — cache shader, only recreate when width changes significantly
-    final rect = Rect.fromCenter(center: center, width: coinWidth, height: h);
-    if (_cachedShader == null || (coinWidth - _cachedShaderWidth).abs() > 1.0) {
-      _cachedShaderWidth = coinWidth;
-      _cachedShader = const LinearGradient(
-        colors: [Color(0xFFFFD700), Color(0xFFFFA000)],
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-      ).createShader(rect);
-    }
-    _facePaint.shader = _cachedShader;
+    // Coin face — full-size oval squashed horizontally for the spin
+    canvas.save();
+    canvas.translate(center.dx, 0);
+    canvas.scale(coinWidth / w, 1);
+    canvas.translate(-center.dx, 0);
+    canvas.drawOval(Rect.fromLTWH(0, 0, w, h), _facePaint);
+    canvas.restore();
 
-    canvas.drawOval(rect, _facePaint);
+    final rect = Rect.fromCenter(center: center, width: coinWidth, height: h);
 
     // Border
     canvas.drawOval(rect, _borderPaint);
@@ -122,9 +122,10 @@ class _CoinParticle extends PositionComponent with HasGameRef<RunnerGame> {
 
   @override
   void update(double dt) {
-    _vy += 0.2;
-    position.y += _vy;
-    _life -= 0.06;
+    final f = RunnerGame.frameScale(dt);
+    _vy += 0.2 * f;
+    position.y += _vy * f;
+    _life -= 0.06 * f;
     if (_life <= 0) removeFromParent();
   }
 

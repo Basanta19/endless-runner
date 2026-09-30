@@ -66,7 +66,7 @@ class PowerUpComponent extends PositionComponent
     if (gameRef.gameState != RunnerGameState.playing) return;
 
     // Move vertically downwards
-    position.y += gameRef.worldSpeed;
+    position.y += gameRef.worldSpeed * RunnerGame.frameScale(dt);
     _animTime += dt;
 
     // Remove when off screen

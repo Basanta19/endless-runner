@@ -27,8 +27,9 @@ class PlayerComponent extends PositionComponent
   double _velY = 0;
   bool _onGround = true;
   bool _sliding = false;
-  int _slideFrames = 0;
-  bool _canDoubleJump = true;
+  double _slideFrames = 0; // in 60fps-frames
+  late final RectangleHitbox _hitbox;
+  bool _hitboxSliding = false;
   double runFrame = 0;
   double _jumpHeight = 0;
   double _magnetTimer = 0;
@@ -76,7 +77,7 @@ class PlayerComponent extends PositionComponent
   @override
   Future<void> onLoad() async {
     size = Vector2(pw, ph);
-    final h = RectangleHitbox(
+    final h = _hitbox = RectangleHitbox(
       size: Vector2(pw - 30, ph - 26),
       position: Vector2(15, 13),
     );
@@ -124,20 +125,15 @@ class PlayerComponent extends PositionComponent
       _sliding = false;
       _slideFrames = 0;
     }
-    if (_onGround) {
-      AudioService().playSfx('jump.wav');
-      final jumpMult =
-          GameData.characterJumpMultiplier[GameData().selectedCharacter];
-      _velY = jumpPower * jumpMult;
-      _jumpHeight = 1; // Small initial lift
-      _onGround = false;
-      _canDoubleJump = true;
-      GameData().addMissionProgress(MissionType.jump);
-    } else if (_canDoubleJump) {
-      _velY = jumpPower * 0.85;
-      _canDoubleJump = false;
-      GameData().addMissionProgress(MissionType.jump);
-    }
+    // Only jump from the ground — no mid-air double jump
+    if (!_onGround) return;
+    AudioService().playSfx('jump.wav');
+    final jumpMult =
+        GameData.characterJumpMultiplier[GameData().selectedCharacter];
+    _velY = jumpPower * jumpMult;
+    _jumpHeight = 1; // Small initial lift
+    _onGround = false;
+    GameData().addMissionProgress(MissionType.jump);
   }
 
   void slide() {
@@ -197,7 +193,6 @@ class PlayerComponent extends PositionComponent
     _onGround = true;
     _sliding = false;
     _slideFrames = 0;
-    _canDoubleJump = true;
     _jumpHeight = 0;
     _magnetTimer = 0;
     _shieldTimer = 0;
@@ -212,29 +207,33 @@ class PlayerComponent extends PositionComponent
   void update(double dt) {
     if (gameRef.gameState != RunnerGameState.playing) return;
 
-    // Lane snap
+    // Scale per-frame tuning by real elapsed time (see RunnerGame.frameScale)
+    final f = RunnerGame.frameScale(dt);
+
+    // Lane snap — same easing as snapFactor-per-frame at 60fps
     final diff = _targetX - position.x;
-    position.x += diff.abs() < 1 ? diff : diff * snapFactor;
+    position.x += diff.abs() < 1
+        ? diff
+        : diff * (1 - math.pow(1 - snapFactor, f).toDouble());
 
     // Gravity & Jumping
     if (!_onGround) {
-      _velY += gravity;
-      _jumpHeight -= _velY; // Up is positive for jump height
+      _velY += gravity * f;
+      _jumpHeight -= _velY * f; // Up is positive for jump height
       if (_jumpHeight <= 0) {
         _jumpHeight = 0;
         _velY = 0;
         _onGround = true;
-        _canDoubleJump = true;
       }
     }
 
     // Slide countdown
     if (_sliding) {
-      _slideFrames--;
+      _slideFrames -= f;
       if (_slideFrames <= 0) _sliding = false;
     }
 
-    runFrame += _onGround ? 0.22 : 0.05;
+    runFrame += (_onGround ? 0.22 : 0.05) * f;
 
     // Magnet attraction
     if (_magnetTimer > 0) {
@@ -245,7 +244,7 @@ class PlayerComponent extends PositionComponent
         final dist = (coin.position - position).length;
         if (dist < 250) {
           final dir = (position - coin.position).normalized();
-          coin.position += dir * 10.0;
+          coin.position += dir * (10.0 * f);
         }
       }
     }
@@ -268,16 +267,23 @@ class PlayerComponent extends PositionComponent
       _invincibleTimer -= dt;
     }
 
-    // Update hitbox for sliding
-    final hb = children.whereType<RectangleHitbox>().first;
+    _syncHitbox();
+  }
+
+  /// Shrinks the hitbox while sliding. Only touches it when the slide state
+  /// changes, instead of rebuilding it every frame.
+  void _syncHitbox() {
+    if (_hitboxSliding == _sliding) return;
+    _hitboxSliding = _sliding;
+    final hb = _hitbox;
     if (_sliding) {
       // Scale hitbox down for sliding under hurdles
-      hb.size = Vector2(pw - 30, ph * 0.40);
-      hb.position = Vector2(15, ph * 0.55);
+      hb.size.setValues(pw - 30, ph * 0.40);
+      hb.position.setValues(15, ph * 0.55);
     } else {
       // Normal hitbox (matches onLoad)
-      hb.size = Vector2(pw - 30, ph - 26);
-      hb.position = Vector2(15, 13);
+      hb.size.setValues(pw - 30, ph - 26);
+      hb.position.setValues(15, 13);
     }
   }
 
@@ -437,17 +443,23 @@ class PlayerComponent extends PositionComponent
       hair,
     );
 
-    // Multiple spikes for realism
+    // Multiple spikes for realism (path built once, reused every frame)
+    canvas.drawPath(_hairSpikes, hair);
+  }
+
+  static final Path _hairSpikes = () {
+    const cx = pw / 2;
+    final path = Path();
     for (int i = 0; i < 3; i++) {
       final xOffset = (i - 1) * 15.0;
-      final spike = Path()
+      path
         ..moveTo(cx + xOffset - 8, -4)
         ..lineTo(cx + xOffset, -20 - (i % 2 * 5))
         ..lineTo(cx + xOffset + 8, -4)
         ..close();
-      canvas.drawPath(spike, hair);
     }
-  }
+    return path;
+  }();
 
   void _limb(Canvas canvas, double x, double y, double angle, double len,
       double thick, Paint paint) {

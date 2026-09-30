@@ -28,8 +28,14 @@ class RunnerGame extends FlameGame
   final scoreNotifier = ValueNotifier<int>(0);
   final coinsNotifier = ValueNotifier<int>(0);
 
-  int get score => scoreNotifier.value;
-  set score(int v) {
+  // The exact score lives here; the on-screen badge (scoreNotifier) is only
+  // refreshed ~10x/sec so Flutter doesn't rebuild the HUD every frame.
+  int score = 0;
+  double _scoreUiTimer = 0;
+  static const double _scoreUiInterval = 0.1;
+
+  void _publishScore() {
+    final v = score;
     if (scoreNotifier.value == v) return;
     if (SchedulerBinding.instance.schedulerPhase ==
         SchedulerPhase.persistentCallbacks) {
@@ -88,6 +94,7 @@ class RunnerGame extends FlameGame
   bool _panHandled = false;
 
   double _shakeTime = 0;
+  bool _cameraShaken = false;
   int _lastSpeedStep = 0;
   double _elapsedSecs = 0;
   double get elapsedSecs => _elapsedSecs;
@@ -123,6 +130,7 @@ class RunnerGame extends FlameGame
     hud = HudComponent();
     await add(hud);
 
+    camera.viewfinder.position = Vector2(size.x / 2, size.y / 2);
     gameState = RunnerGameState.playing;
   }
 
@@ -140,6 +148,11 @@ class RunnerGame extends FlameGame
       score += points;
       GameData().recordMissionDistance(score ~/ Missions.scorePerMeter);
     }
+    _scoreUiTimer += dt;
+    if (_scoreUiTimer >= _scoreUiInterval) {
+      _scoreUiTimer = 0;
+      _publishScore();
+    }
 
     final speedMult =
         GameData.characterSpeedMultiplier[GameData().selectedCharacter];
@@ -154,12 +167,15 @@ class RunnerGame extends FlameGame
       _shakeTime -= dt;
       final amp = _shakeTime * 12;
       final even = (_shakeTime * 100).toInt().isEven;
-      camera.viewfinder.position = Vector2(
+      camera.viewfinder.position.setValues(
         size.x / 2 + (even ? amp : -amp),
         size.y / 2 + (even ? amp * 0.4 : -amp * 0.4),
       );
-    } else {
-      camera.viewfinder.position = Vector2(size.x / 2, size.y / 2);
+      _cameraShaken = true;
+    } else if (_cameraShaken) {
+      // Re-center once after a shake instead of every frame
+      camera.viewfinder.position.setValues(size.x / 2, size.y / 2);
+      _cameraShaken = false;
     }
 
     // Only update audio pitch when a new speed milestone is reached
@@ -169,9 +185,15 @@ class RunnerGame extends FlameGame
     }
 
     // Move the lane reservations down with the world (clamped to prevent drift)
+    final step = worldSpeed * frameScale(dt);
     _laneOccupiedUntil
-        .updateAll((k, v) => (v + worldSpeed).clamp(-10000.0, size.y + 500));
+        .updateAll((k, v) => (v + step).clamp(-10000.0, size.y + 500));
   }
+
+  /// Converts a frame's dt into "60fps frames" so movement tuned per-frame
+  /// stays the same speed at any refresh rate and doesn't jerk on a dropped
+  /// frame. Capped so a long hitch can't teleport things through the player.
+  static double frameScale(double dt) => (dt * 60).clamp(0.0, 3.0);
 
   // ── Input ────────────────────────────────────────────────────────────────
   @override
@@ -222,6 +244,7 @@ class RunnerGame extends FlameGame
   void triggerGameOver() {
     if (gameState != RunnerGameState.playing) return;
     gameState = RunnerGameState.crashed;
+    _publishScore(); // show the exact final score
     AudioService().stopBgm();
     AudioService().playSfx('crash.wav');
 
@@ -292,6 +315,8 @@ class RunnerGame extends FlameGame
   }
 
   void restartGame() {
+    score = 0;
+    _scoreUiTimer = 0;
     scoreNotifier.value = 0;
     coinsNotifier.value = 0;
     worldSpeed = 6.0;

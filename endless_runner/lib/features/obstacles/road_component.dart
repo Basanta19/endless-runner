@@ -19,7 +19,7 @@ class RoadComponent extends Component with HasGameRef<RunnerGame> {
   void update(double dt) {
     if (gameRef.gameState.index == 1) {
       // playing
-      _scrollOffset += gameRef.worldSpeed * 1.5;
+      _scrollOffset += gameRef.worldSpeed * 1.5 * RunnerGame.frameScale(dt);
     }
   }
 

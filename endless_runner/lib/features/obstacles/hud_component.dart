@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:runner_rush/runner_game.dart';
 
 /// Flame HUD — rendered last, not affected by camera.
-/// Draws score, speed bar, coin counter directly on canvas.
+/// Draws the speed bar and power-up timers directly on canvas.
 // ignore: deprecated_member_use
 class HudComponent extends Component with HasGameRef<RunnerGame> {
   @override
@@ -16,10 +16,6 @@ class HudComponent extends Component with HasGameRef<RunnerGame> {
   final Paint _puBarFillPaint = Paint();
 
   // ── Cached TextPainters ─────────────────────────────────────────────────
-  final TextPainter _scorePainter =
-      TextPainter(textDirection: TextDirection.ltr);
-  int _lastScore = -1;
-
   // Power-up label painters (cached once, text never changes)
   final TextPainter _magLabel = TextPainter(
     text: const TextSpan(
@@ -51,17 +47,8 @@ class HudComponent extends Component with HasGameRef<RunnerGame> {
     final game = gameRef;
     final w = game.size.x;
 
-    // Score — only re-layout when value changes
-    if (game.score != _lastScore) {
-      _lastScore = game.score;
-      _scorePainter.text = TextSpan(
-        text: '${game.score}',
-        style: const TextStyle(
-            color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-      );
-      _scorePainter.layout();
-    }
-    _scorePainter.paint(canvas, const Offset(70, 16));
+    // Score is shown by the Flutter badge in GameScreen; drawing it here too
+    // meant a text re-layout every frame for a duplicate hidden under it.
 
     // Speed bar (bottom)
     final speedFrac = ((game.worldSpeed - 6) / 12).clamp(0.0, 1.0);
