@@ -180,7 +180,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         title: const Text('RESET DATA',
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         content: const Text(
-            'This will reset your high score. Coins and characters will remain. Continue?',
+            'This will reset your high score and clear your Top 10 runs. Coins and characters will remain. Continue?',
             style: TextStyle(color: AppColors.textGray)),
         actions: [
           TextButton(
@@ -190,10 +190,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           TextButton(
             onPressed: () {
-              setState(() {
-                _gd.highScore = 0;
-                _gd.save();
-              });
+              _gd.resetHighScore();
+              setState(() {});
               Navigator.pop(dialogContext);
               showInfoPopup(
                 context,

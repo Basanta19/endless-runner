@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'database_service.dart';
 import 'missions.dart';
 
 class GameData {
@@ -55,7 +56,147 @@ class GameData {
   static const List<double> characterJumpMultiplier = [1.0, 1.0, 1.25, 0.95];
   static const List<double> characterSpeedMultiplier = [1.0, 1.1, 1.0, 1.2];
 
-  Future<void> load() async {
+  // ── Persistence ──────────────────────────────────────────────────────────
+  // Phone: SQLite via DatabaseService. Web: SharedPreferences fallback.
+  // Older installs saved to SharedPreferences; that data is copied into the
+  // database once, on the first launch after the update.
+
+  Future<void>? _loading;
+  Future<void> _saveQueue = Future.value();
+
+  /// Loads saved data once per app session. Later calls reuse the first
+  /// load, so a reload can never overwrite changes that are still saving.
+  Future<void> load() => _loading ??= _load();
+
+  Future<void> _load() async {
+    if (!DatabaseService.isSupported) return _loadFromPrefs();
+    try {
+      final dbService = DatabaseService();
+      final profile = await dbService.loadProfile();
+      if (profile == null) {
+        // First launch with the database: migrate old SharedPreferences data
+        await _loadFromPrefs();
+        await _saveToDb();
+        return;
+      }
+      coins = profile['coins'] as int;
+      gems = profile['gems'] as int;
+      highScore = profile['high_score'] as int;
+      selectedCharacter = profile['selected_character'] as int;
+      magnetLevel = profile['magnet_level'] as int;
+      shieldLevel = profile['shield_level'] as int;
+      speedLevel = profile['speed_level'] as int;
+      nickname = profile['nickname'] as String;
+      musicEnabled = (profile['music_enabled'] as int) == 1;
+      sfxEnabled = (profile['sfx_enabled'] as int) == 1;
+      lastDailyRewardDate = profile['last_daily_reward'] as String;
+      missionTier = profile['mission_tier'] as int;
+
+      final chars = await dbService.loadCharacters();
+      unlockedCharacters = List.generate(
+        characterNames.length,
+        (i) => i == 0 || (i < chars.length && chars[i]),
+      );
+
+      final missionRows = await dbService.loadMissions();
+      missionProgress = List.filled(Missions.all.length, 0);
+      missionClaimed = List.filled(Missions.all.length, false);
+      for (final row in missionRows) {
+        final slot = row['slot'] as int;
+        if (slot >= Missions.all.length) continue;
+        missionProgress[slot] = row['progress'] as int;
+        missionClaimed[slot] = (row['claimed'] as int) == 1;
+      }
+    } catch (e) {
+      // Never block the game on storage; fall back to the old store
+      debugPrint('Database load failed, using SharedPreferences: $e');
+      await _loadFromPrefs();
+    }
+  }
+
+  /// Saves everything. Saves run one after another in call order.
+  Future<void> save() {
+    return _saveQueue = _saveQueue.then((_) async {
+      try {
+        if (DatabaseService.isSupported) {
+          await _saveToDb();
+        } else {
+          await _saveToPrefs();
+        }
+      } catch (e) {
+        debugPrint('Save failed: $e');
+      }
+    });
+  }
+
+  Future<void> _saveToDb() {
+    return DatabaseService().saveAll(
+      profile: {
+        'coins': coins,
+        'gems': gems,
+        'high_score': highScore,
+        'selected_character': selectedCharacter,
+        'magnet_level': magnetLevel,
+        'shield_level': shieldLevel,
+        'speed_level': speedLevel,
+        'nickname': nickname,
+        'music_enabled': musicEnabled ? 1 : 0,
+        'sfx_enabled': sfxEnabled ? 1 : 0,
+        'last_daily_reward': lastDailyRewardDate,
+        'mission_tier': missionTier,
+      },
+      characters: unlockedCharacters,
+      missionProgress: missionProgress,
+      missionClaimed: missionClaimed,
+    );
+  }
+
+  // ── Runs (Top 10) ────────────────────────────────────────────────────────
+
+  /// Stores a finished run for the Top Runs screen.
+  Future<void> recordRun({
+    required int score,
+    required int coinsCollected,
+  }) async {
+    if (!DatabaseService.isSupported || score <= 0) return;
+    try {
+      await DatabaseService().insertRun(RunRecord(
+        score: score,
+        distance: score ~/ Missions.scorePerMeter,
+        coins: coinsCollected,
+        character: selectedCharacter,
+        playedAt: DateTime.now(),
+      ));
+    } catch (e) {
+      debugPrint('Recording run failed: $e');
+    }
+  }
+
+  Future<List<RunRecord>> topRuns() async {
+    if (!DatabaseService.isSupported) return [];
+    try {
+      return await DatabaseService().topRuns(limit: 10);
+    } catch (e) {
+      debugPrint('Loading top runs failed: $e');
+      return [];
+    }
+  }
+
+  /// Resets the high score and clears the run history.
+  Future<void> resetHighScore() async {
+    highScore = 0;
+    await save();
+    if (!DatabaseService.isSupported) return;
+    try {
+      await DatabaseService().clearRuns();
+    } catch (e) {
+      debugPrint('Clearing runs failed: $e');
+    }
+  }
+
+  // ── SharedPreferences (legacy / web) ─────────────────────────────────────
+
+  Future<void> _loadFromPrefs() async {
     final prefs = await SharedPreferences.getInstance();
     coins = prefs.getInt('coins') ?? 2000;
     gems = prefs.getInt('gems') ?? 30;
@@ -86,7 +227,7 @@ class GameData {
     sfxEnabled = prefs.getBool('sfxEnabled') ?? true;
   }
 
-  Future<void> save() async {
+  Future<void> _saveToPrefs() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('coins', coins);
     await prefs.setInt('gems', gems);

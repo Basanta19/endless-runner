@@ -260,6 +260,7 @@ class RunnerGame extends FlameGame
     if (gameState == RunnerGameState.gameOver) return;
     gameState = RunnerGameState.gameOver;
     GameData().updateHighScore(score);
+    GameData().recordRun(score: score, coinsCollected: coinsCollected);
     // Add collected coins to global total only at the end of the run
     GameData().coins += coinsCollected;
     GameData().save();

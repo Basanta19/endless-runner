@@ -5,6 +5,7 @@ import '../../core/game_data.dart';
 import 'game_screen.dart';
 import 'character_screen.dart';
 import 'missions_screen.dart';
+import 'top_runs_screen.dart';
 import 'profile_screen.dart';
 import 'settings_screen.dart';
 import 'store_screen.dart'; // This will remain named StoreScreen for now but I'll update the title
@@ -365,6 +366,12 @@ class _HomeScreenState extends State<HomeScreen>
               // Bottom nav
               BottomNavBar(
                 onHome: () {},
+                onRanks: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const TopRunsScreen()),
+                  );
+                },
                 onSettings: () {
                   Navigator.push(
                     context,

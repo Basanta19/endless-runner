@@ -211,11 +211,13 @@ class _GradientButtonState extends State<GradientButton>
 
 class BottomNavBar extends StatelessWidget {
   final VoidCallback onHome;
+  final VoidCallback onRanks;
   final VoidCallback onSettings;
 
   const BottomNavBar({
     super.key,
     required this.onHome,
+    required this.onRanks,
     required this.onSettings,
   });
 
@@ -239,6 +241,7 @@ class BottomNavBar extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
+          _navItem(Icons.leaderboard_rounded, 'RANKS', onRanks),
           _navItem(Icons.home_rounded, 'HOME', onHome, isActive: true),
           _navItem(Icons.settings_rounded, 'SETTINGS', onSettings),
         ],
