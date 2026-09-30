@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'firebase_service.dart';
 import 'missions.dart';
 
 class GameData {
@@ -113,9 +112,6 @@ class GameData {
     );
     await prefs.setBool('musicEnabled', musicEnabled);
     await prefs.setBool('sfxEnabled', sfxEnabled);
-
-    // Push to Firebase in the background
-    FirebaseService().syncToCloud();
   }
 
   Future<void> updateHighScore(int score) async {

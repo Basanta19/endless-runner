@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6,6 +7,8 @@ import '../../core/app_colors.dart';
 import '../../core/game_data.dart';
 import 'pause_menu.dart';
 import 'game_over.dart';
+import 'respawn_overlay.dart';
+import '../../core/game_state.dart';
 import '../../services/audio_service.dart';
 
 class GameScreen extends StatefulWidget {
@@ -17,6 +20,18 @@ class GameScreen extends StatefulWidget {
 class _GameScreenState extends State<GameScreen> {
   late final RunnerGame _game;
   bool _gameOver = false;
+  bool _respawnOffer = false;
+  bool _showHint = true;
+  Timer? _hintTimer;
+
+  /// Shows the controls hint for 1 second at the start of each run.
+  void _startHint() {
+    _hintTimer?.cancel();
+    if (mounted) setState(() => _showHint = true);
+    _hintTimer = Timer(const Duration(seconds: 1), () {
+      if (mounted) setState(() => _showHint = false);
+    });
+  }
 
   void _safeSetState(VoidCallback fn) {
     if (!mounted) return;
@@ -32,10 +47,23 @@ class _GameScreenState extends State<GameScreen> {
     super.initState();
     _game = RunnerGame();
     _game.onGameOver = () => _safeSetState(() => _gameOver = true);
+    _game.onCrash = () => _safeSetState(() => _respawnOffer = true);
+    _startHint();
+  }
+
+  void _onRespawn() {
+    setState(() => _respawnOffer = false);
+    if (!_game.respawn()) _game.finalizeGameOver();
+  }
+
+  void _onRespawnDeclined() {
+    setState(() => _respawnOffer = false);
+    _game.finalizeGameOver();
   }
 
   @override
   void dispose() {
+    _hintTimer?.cancel();
     _game.pauseEngine();
     // Persist mission progress if the player quits mid-run
     GameData().save();
@@ -45,6 +73,8 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   void _onPause() {
+    // No pausing during the respawn countdown or after game over
+    if (_game.gameState != RunnerGameState.playing) return;
     _game.pauseGame();
     showDialog(
       context: context,
@@ -58,6 +88,7 @@ class _GameScreenState extends State<GameScreen> {
           Navigator.pop(context);
           _safeSetState(() => _gameOver = false);
           _game.restartGame();
+          _startHint();
         },
         onHome: () {
           Navigator.pop(context);
@@ -126,19 +157,35 @@ class _GameScreenState extends State<GameScreen> {
           ),
 
           // ── Swipe hint ─────────────────────────────────────────────────
-          if (!_gameOver && _game.score < 20)
-            const Positioned(
-              bottom: 80,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: Text(
-                  '← SWIPE TO DODGE →   ↑ SWIPE UP TO JUMP',
-                  style: TextStyle(
-                      color: Colors.white60,
-                      fontSize: 12,
-                      shadows: [Shadow(color: Colors.black, blurRadius: 4)]),
+          Positioned(
+            bottom: 80,
+            left: 0,
+            right: 0,
+            child: IgnorePointer(
+              child: AnimatedOpacity(
+                opacity: _showHint && !_gameOver ? 1 : 0,
+                duration: const Duration(milliseconds: 250),
+                child: const Center(
+                  child: Text(
+                    '← SWIPE TO DODGE →   ↑ SWIPE UP TO JUMP   ↓ SWIPE DOWN TO SLIDE',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        color: Colors.white60,
+                        fontSize: 12,
+                        shadows: [Shadow(color: Colors.black, blurRadius: 4)]),
+                  ),
                 ),
+              ),
+            ),
+          ),
+
+          // ── Respawn offer (3s) ─────────────────────────────────────────
+          if (_respawnOffer)
+            Positioned.fill(
+              child: RespawnOverlay(
+                cost: _game.respawnCost,
+                onRespawn: _onRespawn,
+                onTimeout: _onRespawnDeclined,
               ),
             ),
 
@@ -155,6 +202,7 @@ class _GameScreenState extends State<GameScreen> {
                     _gameOver = false;
                   });
                   _game.restartGame();
+                  _startHint();
                 },
                 onHome: () {
                   _game.pauseEngine();

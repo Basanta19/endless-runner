@@ -34,8 +34,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         GameData().save();
         _isEditing = false;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Nickname updated!')),
+      showInfoPopup(
+        context,
+        'Nickname updated!',
+        icon: Icons.check_circle_rounded,
       );
     }
   }

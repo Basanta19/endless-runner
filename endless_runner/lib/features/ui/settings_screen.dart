@@ -172,7 +172,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _showResetConfirmation() {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         backgroundColor: AppColors.panelDark,
         shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
@@ -184,7 +184,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             style: TextStyle(color: AppColors.textGray)),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('CANCEL',
                 style: TextStyle(color: AppColors.textGray)),
           ),
@@ -194,9 +194,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _gd.highScore = 0;
                 _gd.save();
               });
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('High score reset!')));
+              Navigator.pop(dialogContext);
+              showInfoPopup(
+                context,
+                'High score reset!',
+                icon: Icons.refresh_rounded,
+              );
             },
             child: const Text('RESET',
                 style: TextStyle(

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:runner_rush/features/ui/app_widgets.dart';
-import 'package:runner_rush/features/ui/leaderboard_screen.dart';
 import '../../core/app_colors.dart';
 import '../../core/game_data.dart';
 import 'game_screen.dart';
@@ -182,7 +181,7 @@ class _HomeScreenState extends State<HomeScreen>
                         border: Border.all(color: AppColors.cardBorder),
                       ),
                       child: Text(
-                        gd.nickname.toUpperCase(),
+                        gd.nickname,
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
@@ -366,14 +365,6 @@ class _HomeScreenState extends State<HomeScreen>
               // Bottom nav
               BottomNavBar(
                 onHome: () {},
-                onLeaderboard: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const LeaderboardScreen(),
-                    ),
-                  ).then((_) => setState(() {}));
-                },
                 onSettings: () {
                   Navigator.push(
                     context,

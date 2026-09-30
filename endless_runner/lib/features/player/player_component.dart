@@ -173,6 +173,11 @@ class PlayerComponent extends PositionComponent
     _speedMax = duration;
   }
 
+  /// Blinking, can't be hit — used after a respawn.
+  void grantInvincibility(double seconds) {
+    _invincibleTimer = seconds;
+  }
+
   bool hitShield() {
     if (_shieldTimer > 0) {
       _shieldTimer = 0; // Shield used up

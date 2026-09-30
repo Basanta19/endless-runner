@@ -45,7 +45,10 @@ class _SplashScreenState extends State<SplashScreen>
         }
       }
     });
-    _progressCtrl.forward();
+    // Hold the starting sliver briefly so it's visible, then start filling
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (mounted) _progressCtrl.forward();
+    });
   }
 
   @override
@@ -159,6 +162,8 @@ class _SplashScreenState extends State<SplashScreen>
                           ),
                           const SizedBox(height: 10),
                           Container(
+                            // Full-width track so the fill grows from the left
+                            width: double.infinity,
                             height: 10,
                             decoration: BoxDecoration(
                               color: AppColors.panelDark,
@@ -169,7 +174,8 @@ class _SplashScreenState extends State<SplashScreen>
                               animation: _progress,
                               builder: (_, __) => FractionallySizedBox(
                                 alignment: Alignment.centerLeft,
-                                widthFactor: _progress.value,
+                                // Start with a 5% sliver, then grow to full
+                                widthFactor: 0.05 + 0.95 * _progress.value,
                                 child: Container(
                                   decoration: BoxDecoration(
                                     gradient: const LinearGradient(

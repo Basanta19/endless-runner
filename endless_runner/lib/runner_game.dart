@@ -73,6 +73,16 @@ class RunnerGame extends FlameGame
 
   VoidCallback? onGameOver;
 
+  /// Called on a crash when a respawn can be offered.
+  VoidCallback? onCrash;
+
+  static const int respawnBaseCost = 10; // gems for the first respawn in a run
+  int _respawnsThisRun = 0;
+
+  /// Doubles with every respawn in the same run: 10, 20, 40, ...
+  int get respawnCost => respawnBaseCost * (1 << _respawnsThisRun);
+  static const double respawnInvincibility = 2.0; // seconds
+
   Vector2? _panStart;
   static const double _swipeThreshold = 20.0;
   bool _panHandled = false;
@@ -172,6 +182,7 @@ class RunnerGame extends FlameGame
 
   @override
   void onPanUpdate(DragUpdateInfo info) {
+    if (gameState != RunnerGameState.playing) return;
     if (_panHandled || _panStart == null) return;
     final delta = info.eventPosition.global - _panStart!;
     if (delta.length < _swipeThreshold) return;
@@ -206,16 +217,50 @@ class RunnerGame extends FlameGame
   // ── Public API ───────────────────────────────────────────────────────────
   void triggerShake() => _shakeTime = 0.25;
 
+  /// Called when the player hits an obstacle. Freezes the run and offers a
+  /// respawn if the player can afford it; otherwise ends the run.
   void triggerGameOver() {
+    if (gameState != RunnerGameState.playing) return;
+    gameState = RunnerGameState.crashed;
+    AudioService().stopBgm();
+    AudioService().playSfx('crash.wav');
+
+    if (onCrash != null && GameData().gems >= respawnCost) {
+      onCrash!.call();
+    } else {
+      finalizeGameOver();
+    }
+  }
+
+  /// Ends the run for good: saves high score and run coins, shows Game Over.
+  void finalizeGameOver() {
     if (gameState == RunnerGameState.gameOver) return;
     gameState = RunnerGameState.gameOver;
     GameData().updateHighScore(score);
     // Add collected coins to global total only at the end of the run
     GameData().coins += coinsCollected;
     GameData().save();
-    AudioService().stopBgm();
-    AudioService().playSfx('crash.wav');
     onGameOver?.call();
+  }
+
+  /// Continues the same run (score and coins kept) for [respawnCost] gems.
+  bool respawn() {
+    if (gameState != RunnerGameState.crashed) return false;
+    if (GameData().gems < respawnCost) return false;
+    GameData().gems -= respawnCost;
+    _respawnsThisRun++;
+    GameData().save();
+
+    // Clear the road so the player doesn't crash again instantly
+    obstacleSpawner.reset();
+    _laneOccupiedUntil.updateAll((_, __) => 10000);
+    _shakeTime = 0;
+    camera.viewfinder.position = Vector2(size.x / 2, size.y / 2);
+
+    player.grantInvincibility(respawnInvincibility);
+    AudioService().playBgm();
+    gameState = RunnerGameState.playing;
+    return true;
   }
 
   void collectCoin() {
@@ -254,6 +299,7 @@ class RunnerGame extends FlameGame
     _elapsedSecs = 0;
     _lastSpeedStep = 0;
     _scoreAccumulator = 0;
+    _respawnsThisRun = 0;
     player.reset();
     obstacleSpawner.reset();
     coinSpawner.reset();

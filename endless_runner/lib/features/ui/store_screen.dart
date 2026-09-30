@@ -120,8 +120,11 @@ class _StoreScreenState extends State<StoreScreen> {
       });
       // The level dots animate a "+1" themselves
     } else {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Not enough coins!')));
+      showInfoPopup(
+        context,
+        'Not enough coins!',
+        icon: Icons.monetization_on_rounded,
+      );
     }
   }
 }

@@ -112,9 +112,10 @@ class _CharacterScreenState extends State<CharacterScreen> {
                               if (bought) {
                                 setState(() {});
                               } else {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                      content: Text('Not enough coins!')),
+                                showInfoPopup(
+                                  context,
+                                  'Not enough coins!',
+                                  icon: Icons.monetization_on_rounded,
                                 );
                               }
                             },
